@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, Response, jsonify
+from flask import Flask, render_template, request, Response, jsonify, redirect
 from flask_socketio import SocketIO, emit
+from werkzeug.middleware.proxy_fix import ProxyFix
 from queue import Queue
 from pyzbar import pyzbar
 from pyzbar.pyzbar import decode, ZBarSymbol
@@ -17,6 +18,22 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] ='llave-secreta'
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Redirección de HTTP a HTTPS
+class HTTPSMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        if environ.get('HTTP_X_FORWARDED_PROTO') == 'http':
+            url = request.url.replace('http://', 'https://', 1)
+            return redirect(url, code=301)
+        return self.app(environ, start_response)
+
+app.wsgi_app = HTTPSMiddleware(app.wsgi_app)
+
 socketio = SocketIO(app, async_mode='eventlet')
 
 #Conexion a la base de datos
@@ -28,9 +45,13 @@ db = SQLAlchemy(app)
 
 def stringToImage(base64_string):
     imgdata = base64.b64decode(base64_string)
+    imagen = Image.open(io.BytesIO(imgdata))
+    path = 'imagen_decodificada.png'
+    imagen.save(path)
     return Image.open(io.BytesIO(imgdata))
 
 def toRGB(image):
+    
     return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
 
@@ -44,11 +65,19 @@ def procesamiento_frame(frame):
     # Convertir la imagen a escala de grises
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    umbral = 130
+    valor_maximo = 255
+    
     # Aplicar umbral binario
-    _, binary = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    _, binary = cv2.threshold(gray, umbral, valor_maximo, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
+
+    # Ajuste de filtro gaussiano
+    tamaño_kernel = (5, 5)
+    desviacion_x = 0
+    desviacion_y = 0
     # Aplicar filtro gaussiano
-    blurred = cv2.GaussianBlur(binary, (5, 5), 0)
+    blurred = cv2.GaussianBlur(binary, tamaño_kernel, desviacion_x,desviacion_y)
 
     # Lógica para detectar el código de barras con OpenCV
     # Usa la biblioteca que desees para el reconocimiento del código de barras
@@ -69,7 +98,7 @@ def procesamiento_frame(frame):
             if barcode_found:
                 socketio.emit('redirect', {'url': '/codigoDeProducto'})
             
-        break
+        
    
 
 # Socket que permite transmitir el codigo capturado y redirigir para su manejo.
@@ -195,6 +224,7 @@ def googleCodigo(numero):
 
         # Seleccionar las primeras tres etiquetas h3
         selected_h3 = h3_tags[:3]
+        print(f' ESTOS SON LOS TAGS ENCONTRADOS   {selected_h3}')
 
         # Obtener el texto de las etiquetas h3 seleccionadas
         h3_text = [tag.get_text() for tag in selected_h3]
@@ -237,4 +267,4 @@ def googleCodigo(numero):
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True,host='localhost', port=5000)

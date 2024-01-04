@@ -1,0 +1,26 @@
+{% extends "layout.html" %} 
+
+{% block content %}
+
+
+<h1>Lector de Código de Barras desde la Cámara</h1>
+<div id="video-container">
+    <video id="video" width="640" height="480" autoplay></video>
+</div>
+    <script src="https://cdn.jsdelivr.net/npm/quagga/dist/quagga.min.js"></script>
+    
+    <script src="{{ url_for('static', filename='js/lector.js') }}"></script>
+    
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('redirect', function(data) {
+            window.location.href = data.url;  // Redirigir automáticamente
+        });
+    </script>
+
+
+{% endblock content %}
+
