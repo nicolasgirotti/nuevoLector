@@ -39,7 +39,7 @@ navigator.mediaDevices.getUserMedia(constraints)
 
                 var imageDataURL = canvas.toDataURL('image/png');
 
-                fetch('https://lector-de-barras.onrender.com/recibir_frame', {
+                fetch('/recibir_frame', {
                     method: 'POST',
                     body: JSON.stringify({ image_data: imageDataURL }),
                     headers: {
